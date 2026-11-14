@@ -130,9 +130,11 @@ namespace TaskbarQuota
         /// </summary>
         public const int MaxWidgetTiles = 3;
 
-        /// <summary>Effective quota-tile cap: three tiles normally, or two while the activity island is shown.</summary>
+        /// <summary>Effective quota-tile cap: three tiles normally or in compact mode, or two while the activity island is shown.</summary>
         public static int MaxDisplayedWidgetTiles =>
-            WidgetSettingsService.ShowAgentActivityInWidget ? 2 : MaxWidgetTiles;
+            WidgetSettingsService.ShowAgentActivityInWidget && !WidgetSettingsService.CompactWidgetMode
+                ? 2
+                : MaxWidgetTiles;
 
         /// <summary>
         /// Every provider the taskbar should consider rendering: visible and available PINNED

@@ -366,5 +366,78 @@ public class PinBudgetServiceTests
         Assert.Equal(TaskbarSpace.UnknownWidth, TaskbarSpace.AvailableLogicalWidth);
     }
 
+    [Theory]
+    [InlineData(1, 100)]
+    [InlineData(2, 100)]
+    [InlineData(3, 170)]
+    [InlineData(4, 170)]
+    public void CompactWidgetModeLowersEstimatedTileWidth(int rows, int expected)
+    {
+        bool previousCompact = WidgetSettingsService.CompactWidgetMode;
+        try
+        {
+            WidgetSettingsService.SetCompactWidgetModeForTesting(true);
+            Assert.Equal(expected, PinBudgetService.EstimateTileWidth(rows));
+        }
+        finally
+        {
+            WidgetSettingsService.SetCompactWidgetModeForTesting(previousCompact);
+        }
+    }
+
+    [Fact]
+    public void CompactWidgetModeAllowsThreePinnedProvidersWithinCenteredTaskbarBudget()
+    {
+        var providers = Enum.GetValues<ProviderId>();
+        var previousPins = providers.ToDictionary(provider => provider, WidgetSettingsService.IsProviderPinned);
+        var previousSurface = WidgetSettingsService.CurrentSurface;
+        var previousOpacity = WidgetSettingsService.FloatingOpacity;
+        var previousCompact = WidgetSettingsService.CompactWidgetMode;
+        var previousMode = WidgetSettingsService.CurrentTaskbarPlacement;
+        var previousSelection = WidgetSettingsService.SelectedTaskbarDisplayKey;
+        var previousAdaptive = providers
+            .Select(p => (Provider: p.ToString(), Display: WidgetSettingsService.GetAdaptiveProviderDisplay(p)))
+            .Where(p => p.Display is not null)
+            .ToDictionary(p => p.Provider, p => p.Display!);
+        var previousPinnedDisplays = providers
+            .Select(p => (Provider: p.ToString(), Display: WidgetSettingsService.GetPinnedProviderDisplay(p)))
+            .Where(p => p.Display is not null)
+            .ToDictionary(p => p.Provider, p => p.Display!);
+
+        try
+        {
+            WidgetSettingsService.RestoreSurfaceSettingsForTesting(WidgetSurfaceMode.Taskbar, previousOpacity);
+            WidgetSettingsService.RestoreTaskbarPlacementForTesting(
+                TaskbarPlacementMode.SelectedDisplay,
+                "DISPLAY1",
+                new Dictionary<string, string>(),
+                new Dictionary<string, string>());
+            WidgetSettingsService.ResetProviderPinsForTesting();
+            WidgetSettingsService.SetCompactWidgetModeForTesting(true);
+            TaskbarSpace.ResetAvailableWidth();
+            TaskbarSpace.ReportAvailableWidth("DISPLAY1", 588, isPrimary: true);
+
+            Assert.Equal(UsageCoordinator.MaxWidgetTiles, UsageCoordinator.MaxDisplayedWidgetTiles);
+
+            WidgetSettingsService.SetProviderPinnedForTesting(ProviderId.Claude, true);
+            WidgetSettingsService.SetProviderPinnedForTesting(ProviderId.Codex, true);
+            Assert.True(PinBudgetService.CanPin(ProviderId.Antigravity, out string reason), reason);
+        }
+        finally
+        {
+            WidgetSettingsService.SetCompactWidgetModeForTesting(previousCompact);
+            WidgetSettingsService.ResetProviderPinsForTesting();
+            foreach (var pair in previousPins)
+                WidgetSettingsService.SetProviderPinnedForTesting(pair.Key, pair.Value);
+            WidgetSettingsService.RestoreTaskbarPlacementForTesting(
+                previousMode,
+                previousSelection,
+                previousAdaptive,
+                previousPinnedDisplays);
+            WidgetSettingsService.RestoreSurfaceSettingsForTesting(previousSurface, previousOpacity);
+            TaskbarSpace.ResetAvailableWidth();
+        }
+    }
+
     private static List<(ProviderId, int)> Pinned(params (ProviderId, int)[] entries) => [.. entries];
 }

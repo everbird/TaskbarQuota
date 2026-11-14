@@ -53,6 +53,17 @@
                 </ComboBox>
             </tk:SettingsCard>
 
+            <tk:SettingsCard Header="Compact widget tiles"
+                             Description="Use concise row labels and hide inline reset times in the widget to fit more pinned providers side by side. Reset times remain in hover tooltips.">
+                <tk:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE73F;"/>
+                </tk:SettingsCard.HeaderIcon>
+                <ToggleSwitch x:Name="CompactWidgetToggle"
+                              AutomationProperties.Name="Compact widget tiles"
+                              AutomationProperties.AutomationId="CompactWidgetToggle"
+                              Toggled="OnCompactWidgetToggled"/>
+            </tk:SettingsCard>
+
             <tk:SettingsCard Header="Percentage display" Description="Choose whether usage percentages show consumed or remaining quota.">
                 <tk:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE9D2;"/>

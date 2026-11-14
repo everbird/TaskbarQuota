@@ -52,9 +52,11 @@ public static class PinBudgetService
     private const int TileMarginLogicalPx = 4;
     private const int TileSeparatorLogicalPx = 7;
     // A tile is an icon plus one column group per two rows. Calibrated from measured tiles: a one-group
-    // tile lands around 225px and a two-group tile around 405px.
+    // tile lands around 225px and a two-group tile around 405px (or ~100px / ~170px in compact mode).
     private const int TileBaseLogicalPx = 45;
     private const int TileGroupLogicalPx = 180;
+    private const int CompactTileBaseLogicalPx = 30;
+    private const int CompactTileGroupLogicalPx = 70;
     private const int RowsPerGroup = 2;
     // Slack for a set containing a provider that has never been rendered, whose width can only be modelled.
     private const int EstimatedFitMarginLogicalPx = 12;
@@ -65,7 +67,12 @@ public static class PinBudgetService
 
     /// <summary>Width a provider's tile takes, from the column groups its rows occupy.</summary>
     internal static int EstimateTileWidth(int rows)
-        => TileBaseLogicalPx + (((Math.Max(1, rows) + RowsPerGroup - 1) / RowsPerGroup) * TileGroupLogicalPx);
+    {
+        int groups = (Math.Max(1, rows) + RowsPerGroup - 1) / RowsPerGroup;
+        if (WidgetSettingsService.CompactWidgetMode)
+            return CompactTileBaseLogicalPx + (groups * CompactTileGroupLogicalPx);
+        return TileBaseLogicalPx + (groups * TileGroupLogicalPx);
+    }
 
     /// <summary>Width a whole row of tiles takes, including margins and dividers.</summary>
     internal static int RowWidth(IReadOnlyList<int> tileWidths)

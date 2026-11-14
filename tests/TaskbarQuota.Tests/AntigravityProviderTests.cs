@@ -148,6 +148,43 @@ public class AntigravityProviderTests
         }
     }
 
+    [Fact]
+    public void WidgetRows_CompactMode_ShortensLabelsButPreservesFableAndResets()
+    {
+        bool previousCompact = WidgetSettingsService.CompactWidgetMode;
+        WidgetSettingsService.ResetRowVisibilityForTesting();
+        try
+        {
+            WidgetSettingsService.SetCompactWidgetModeForTesting(true);
+
+            Assert.True(AntigravityProvider.TryParseQuotaSummary(ProWithArgonSummary, out var agUsage));
+            var agResult = UsageResult.Success(ProviderId.Antigravity, new AntigravityProvider(), new ProviderFetchResult(agUsage, "local"));
+            Assert.Equal(new[] { "Wk", "5h", "Wk", "5h", "Argon" }, WidgetSummary.BuildRowLabelsForTesting(agResult, agUsage));
+
+            var claudeUsage = new UsageSnapshot(new RateWindow(50))
+            {
+                Secondary = new RateWindow(30),
+                ResetCredits = new ResetCreditsSnapshot(2, []),
+                ExtraRateWindows = { new NamedRateWindow("claude-fable", "Fable", new RateWindow(25)) },
+            };
+            var claudeResult = UsageResult.Success(ProviderId.Claude, new ClaudeProvider(), new ProviderFetchResult(claudeUsage, "oauth"));
+            Assert.Equal(new[] { "5h", "Wk", "Resets", "Fable" }, WidgetSummary.BuildRowLabelsForTesting(claudeResult, claudeUsage));
+
+            var codexUsage = new UsageSnapshot(new RateWindow(10))
+            {
+                Secondary = new RateWindow(80),
+                ResetCredits = new ResetCreditsSnapshot(3, []),
+            };
+            var codexResult = UsageResult.Success(ProviderId.Codex, new CodexProvider(), new ProviderFetchResult(codexUsage, "oauth"));
+            Assert.Equal(new[] { "5h", "Wk", "Resets" }, WidgetSummary.BuildRowLabelsForTesting(codexResult, codexUsage));
+        }
+        finally
+        {
+            WidgetSettingsService.SetCompactWidgetModeForTesting(previousCompact);
+            WidgetSettingsService.ResetRowVisibilityForTesting();
+        }
+    }
+
     [Theory]
     [InlineData("agy.exe", "\"C:\\Users\\ziedk\\AppData\\Local\\agy\\bin\\agy.exe\"")]
     [InlineData("antigravity-cli.exe", "\"C:\\Program Files\\Antigravity\\antigravity-cli.exe\"")]

@@ -60,6 +60,9 @@ public static class WidgetSettingsService
     private static readonly string WidgetDisplayModePath =
         Path.Combine(AppStorage.AppDataDirectory, "widget-display-mode.txt");
 
+    private static readonly string CompactWidgetModePath =
+        Path.Combine(AppStorage.AppDataDirectory, "compact-widget-mode.txt");
+
     private static string WidgetSurfaceModePath =>
         Path.Combine(AppStorage.AppDataDirectory, "widget-surface-mode.txt");
 
@@ -133,6 +136,8 @@ public static class WidgetSettingsService
     public const double FloatingWindowOpacityMax = 1.0;
 
     public static WidgetDisplayMode Current { get; private set; } = LoadWidgetDisplayMode();
+    /// <summary>Opt-in: compact taskbar/floating tiles with concise labels and tooltips-only reset times.</summary>
+    public static bool CompactWidgetMode { get; private set; } = LoadCompactWidgetMode();
     public static WidgetSurfaceMode CurrentSurface { get; private set; } = LoadWidgetSurfaceMode();
     public static TaskbarPlacementMode CurrentTaskbarPlacement { get; private set; } = LoadTaskbarPlacementMode();
     public static string SelectedTaskbarDisplayKey { get; private set; } = LoadSelectedTaskbarDisplayKey();
@@ -360,6 +365,18 @@ public static class WidgetSettingsService
 
         Current = mode;
         Save(WidgetDisplayModePath, (int)mode);
+        Changed?.Invoke(null, EventArgs.Empty);
+    }
+
+    public static void ApplyCompactWidgetMode(bool enabled)
+    {
+        if (CompactWidgetMode == enabled)
+            return;
+
+        CompactWidgetMode = enabled;
+        Save(CompactWidgetModePath, enabled ? 1 : 0);
+        Taskbar.TaskbarSpace.ClearMeasuredTileWidths();
+        Services.PinBudgetService.EnforceBudget(notify: false);
         Changed?.Invoke(null, EventArgs.Empty);
     }
 
@@ -771,6 +788,12 @@ public static class WidgetSettingsService
     internal static void ResetProviderPinsForTesting()
         => ProviderPins.Clear();
 
+    internal static void SetCompactWidgetModeForTesting(bool enabled)
+    {
+        CompactWidgetMode = enabled;
+        Taskbar.TaskbarSpace.ClearMeasuredTileWidths();
+    }
+
     public static IReadOnlyList<WidgetRowOption> RowOptions(ProviderId provider)
         => provider switch
         {
@@ -891,6 +914,23 @@ public static class WidgetSettingsService
         catch
         {
             return WidgetDisplayMode.BarsOnly;
+        }
+    }
+
+    private static bool LoadCompactWidgetMode()
+    {
+        try
+        {
+            if (!File.Exists(CompactWidgetModePath))
+                return false;
+
+            string raw = File.ReadAllText(CompactWidgetModePath);
+            return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value)
+                && value != 0;
+        }
+        catch
+        {
+            return false;
         }
     }
 

@@ -26,24 +26,34 @@ namespace TaskbarQuota.Controls
         private const int MinLabelColumnWidth = 0;
         private const int MinResetColumnWidth = 0;
         private const int ValueColumnWidth = 34;
+        private const int CompactValueColumnWidth = 0;
         private const int WidgetFontSize = 11;
         private const int BarHeight = 6;
         private const int SingleRowBarHeight = 8;
         private const int BarWidthBarsOnly = 54;
         private const int BarWidthBarsAndPercentages = 46;
+        private const int CompactBarWidthBarsOnly = 38;
+        private const int CompactBarWidthBarsAndPercentages = 34;
         private const int BarColumnWidthBarsOnly = 54;
         private const int BarColumnWidthBarsAndPercentages = 46;
         private const int IconHostSizeBars = 30;
         private const int IconHostSizePercentagesOnly = 26;
+        private const int CompactIconHostSizeBars = 26;
+        private const int CompactIconHostSizePercentagesOnly = 22;
         private const double RowLabelGlyphSize = 12;
         private const double RowLabelGlyphReserve = 18;
+        private const double CompactRowLabelGlyphSize = 11;
+        private const double CompactRowLabelGlyphReserve = 15;
         private const double GlyphViewportSize = 100;
         private const double NormalizedGlyphExtent = 88;
         private const double StaleOpacity = 0.55;
         private const int PanelColumnSpacing = 5;
-        private const int SlideMilliseconds = 300;
+        private const int CompactPanelColumnSpacing = 3;
+        private const int DefaultRootHorizontalPadding = 8;
+        private const int CompactRootHorizontalPadding = 6;
         // Slack the width math reserves on top of the measured columns, so a rounding difference between
         // the analytic total and what the Grid actually arranges can never clip the last column.
+        private const int SlideMilliseconds = 300;
         private const int WidthSlack = 2;
 
         /// <summary>Placeholder shown before any usage has been applied. Shared and never mutated, so a
@@ -557,13 +567,13 @@ namespace TaskbarQuota.Controls
                     {
                         double creditUsed = Math.Max(0, creditLimit - codexCredits.Amount);
                         rows.Add(new WidgetUsageRow(
-                            "Credits",
+                            CompactLabel("Credits"),
                             WidgetSettingsService.DisplayPercent(Math.Clamp(creditUsed / creditLimit * 100, 0, 100)),
                             $"{FormatCreditCount(creditUsed)}/{FormatCreditCount(creditLimit)}"));
                     }
                     else
                     {
-                        rows.Add(new WidgetUsageRow("Credits", 0, FormatCreditCount(codexCredits.Amount), HasBar: false));
+                        rows.Add(new WidgetUsageRow(CompactLabel("Credits"), 0, FormatCreditCount(codexCredits.Amount), HasBar: false));
                     }
                 }
                 if (usage.ResetCredits is { AvailableCount: > 0 } resetCredits && WidgetSettingsService.IsRowVisible(result.Id, WidgetSettingsService.RowResetCredits))
@@ -823,11 +833,11 @@ namespace TaskbarQuota.Controls
             var rows = new List<WidgetUsageRow>();
             if (WidgetSettingsService.IsRowVisible(ProviderId.OpenCode, WidgetSettingsService.RowUsage))
             {
-                rows.Add(new WidgetUsageRow("Usage", 0, usage.Cost?.Display ?? "--", HasBar: false));
+                rows.Add(new WidgetUsageRow(CompactLabel("Usage"), 0, usage.Cost?.Display ?? "--", HasBar: false));
             }
             if (WidgetSettingsService.IsRowVisible(ProviderId.OpenCode, WidgetSettingsService.RowBalance))
             {
-                rows.Add(new WidgetUsageRow("Balance", 0, balanceText != null ? "$" + balanceText.Split(' ')[0] : "--", HasBar: false));
+                rows.Add(new WidgetUsageRow(CompactLabel("Balance"), 0, balanceText != null ? "$" + balanceText.Split(' ')[0] : "--", HasBar: false));
             }
             _rows = rows;
             if (_rows.Count == 0)
@@ -857,7 +867,7 @@ namespace TaskbarQuota.Controls
             _forcePercentagesOnly = true;
             _rows = new List<WidgetUsageRow>
             {
-                new WidgetUsageRow("Balance", 0, usage.Cost?.Display ?? "--", HasBar: false),
+                new WidgetUsageRow(CompactLabel("Balance"), 0, usage.Cost?.Display ?? "--", HasBar: false),
             };
             RenderRows();
             AnimateRender(!_hasRevealed, providerSwitch: providerChanged);
@@ -1317,17 +1327,17 @@ namespace TaskbarQuota.Controls
         private void RenderRows()
         {
             var mode = _forcePercentagesOnly ? WidgetDisplayMode.PercentagesOnly : WidgetSettingsService.Current;
+            bool compact = WidgetSettingsService.CompactWidgetMode;
+            bool showReset = !compact;
 
             ClearDynamicContent();
-            ConfigureStaticColumns(mode);
+            ConfigureStaticColumns(mode, compact);
 
             var rows = CurrentRows();
 
             bool showBars = mode is WidgetDisplayMode.BarsOnly or WidgetDisplayMode.BarsAndPercentages;
             bool showPercentages = mode is WidgetDisplayMode.PercentagesOnly or WidgetDisplayMode.BarsAndPercentages;
-            double barWidth = mode == WidgetDisplayMode.BarsAndPercentages
-                ? BarWidthBarsAndPercentages
-                : BarWidthBarsOnly;
+            double barWidth = BarWidthForMode(mode, compact);
 
             for (int i = 0; i < rows.Count; i++)
             {
@@ -1339,16 +1349,21 @@ namespace TaskbarQuota.Controls
                 // credits meter). A trailing lone row in a multi-group tile stays on the top line, level
                 // with the first row of the group beside it — centring it there just reads as misaligned.
                 bool isSingleRowGroup = rows.Count == 1 && groupCount == 1;
-                var layout = CalculateLayoutMetrics(rows, mode, group);
-                int firstColumn = EnsureGroupColumns(mode, group, layout);
-                AddRow(rows[i], mode, isSingleRowGroup ? 0 : row, firstColumn, showBars, showPercentages, barWidth, isSingleRowGroup);
+                var layout = CalculateLayoutMetrics(rows, mode, group, compact);
+                int firstColumn = EnsureGroupColumns(mode, group, layout, showReset);
+                AddRow(rows[i], mode, isSingleRowGroup ? 0 : row, firstColumn, showBars, showPercentages, barWidth, isSingleRowGroup, compact);
             }
 
             ApplyTaskbarForeground();
             SetBars();
-            DesiredLogicalWidth = CalculateDesiredWidth(rows, mode);
+            DesiredLogicalWidth = CalculateDesiredWidth(rows, mode, compact);
             DesiredHostWidthChanged?.Invoke(DesiredLogicalWidth);
         }
+
+        private static int BarWidthForMode(WidgetDisplayMode mode, bool compact)
+            => mode == WidgetDisplayMode.BarsAndPercentages
+                ? (compact ? CompactBarWidthBarsAndPercentages : BarWidthBarsAndPercentages)
+                : (compact ? CompactBarWidthBarsOnly : BarWidthBarsOnly);
 
         private void ClearDynamicContent()
         {
@@ -1363,24 +1378,26 @@ namespace TaskbarQuota.Controls
                 Panel.ColumnDefinitions.RemoveAt(1);
         }
 
-        private void ConfigureStaticColumns(WidgetDisplayMode mode)
+        private void ConfigureStaticColumns(WidgetDisplayMode mode, bool compact)
         {
-            Panel.ColumnSpacing = PanelColumnSpacing;
-            int iconSize = mode == WidgetDisplayMode.PercentagesOnly ? IconHostSizePercentagesOnly : IconHostSizeBars;
+            double sidePadding = (compact ? CompactRootHorizontalPadding : DefaultRootHorizontalPadding) / 2.0;
+            Root.Padding = new Thickness(sidePadding, 3, sidePadding, 3);
+            Panel.ColumnSpacing = compact ? CompactPanelColumnSpacing : PanelColumnSpacing;
+            int iconSize = IconHostSizeForMode(mode, compact);
             IconColumn.Width = new GridLength(iconSize);
             BadgeHost.Width = iconSize;
             BadgeHost.Height = iconSize;
             Grid.SetColumn(BadgeHost, 0);
         }
 
-        private int EnsureGroupColumns(WidgetDisplayMode mode, int group, WidgetLayoutMetrics layout)
+        private static int IconHostSizeForMode(WidgetDisplayMode mode, bool compact)
+            => mode == WidgetDisplayMode.PercentagesOnly
+                ? (compact ? CompactIconHostSizePercentagesOnly : IconHostSizePercentagesOnly)
+                : (compact ? CompactIconHostSizeBars : IconHostSizeBars);
+
+        private int EnsureGroupColumns(WidgetDisplayMode mode, int group, WidgetLayoutMetrics layout, bool showReset)
         {
-            int columnsPerGroup = mode switch
-            {
-                WidgetDisplayMode.PercentagesOnly => 3,
-                WidgetDisplayMode.BarsAndPercentages => 4,
-                _ => 3,
-            };
+            int columnsPerGroup = ColumnsPerGroup(mode, showReset);
 
             while (Panel.ColumnDefinitions.Count < 1 + ((group + 1) * columnsPerGroup))
             {
@@ -1388,18 +1405,21 @@ namespace TaskbarQuota.Controls
                 {
                     case WidgetDisplayMode.PercentagesOnly:
                         Panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(layout.LabelWidth) });
-                        Panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(layout.ResetWidth) });
+                        if (showReset)
+                            Panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(layout.ResetWidth) });
                         Panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(layout.ValueWidth) });
                         break;
                     case WidgetDisplayMode.BarsAndPercentages:
                         Panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(layout.LabelWidth) });
-                        Panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(layout.ResetWidth) });
+                        if (showReset)
+                            Panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(layout.ResetWidth) });
                         Panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(layout.BarColumnWidth) });
                         Panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(layout.ValueWidth) });
                         break;
                     default:
                         Panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(layout.LabelWidth) });
-                        Panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(layout.ResetWidth) });
+                        if (showReset)
+                            Panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(layout.ResetWidth) });
                         Panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(layout.BarColumnWidth) });
                         break;
                 }
@@ -1408,6 +1428,9 @@ namespace TaskbarQuota.Controls
             return 1 + (group * columnsPerGroup);
         }
 
+        private static int ColumnsPerGroup(WidgetDisplayMode mode, bool showReset)
+            => (mode == WidgetDisplayMode.BarsAndPercentages ? 3 : 2) + (showReset ? 1 : 0);
+
         /// <summary>The rows this tile draws — everything the user enabled, or the placeholder until the
         /// first result lands. Never copies: the measure and render paths both run on every usage publish.
         /// </summary>
@@ -1415,31 +1438,26 @@ namespace TaskbarQuota.Controls
 
         /// <summary>
         /// Total width of the tile for a given row set: the icon column, then per two-row group a label,
-        /// reset and bar/value column, plus inter-column spacing and the root padding. Mirrors exactly what
+        /// optional reset and bar/value column, plus inter-column spacing and the root padding. Mirrors exactly what
         /// <see cref="ConfigureStaticColumns"/> and <see cref="EnsureGroupColumns"/> build, so a measured
         /// candidate and the rendered result can never disagree.
-        ///
-        /// Root.Padding is read from the live element rather than mirrored as a constant: the analytic
-        /// width and the XAML have to agree exactly or a column is clipped, and a constant only agrees
-        /// until someone edits the XAML.
         /// </summary>
         private int CalculateDesiredWidth(IReadOnlyList<WidgetUsageRow> rows, WidgetDisplayMode mode)
-        {
-            int columnsPerGroup = mode switch
-            {
-                WidgetDisplayMode.PercentagesOnly => 3,
-                WidgetDisplayMode.BarsAndPercentages => 4,
-                _ => 3,
-            };
+            => CalculateDesiredWidth(rows, mode, WidgetSettingsService.CompactWidgetMode);
 
-            double total = mode == WidgetDisplayMode.PercentagesOnly ? IconHostSizePercentagesOnly : IconHostSizeBars;
+        private int CalculateDesiredWidth(IReadOnlyList<WidgetUsageRow> rows, WidgetDisplayMode mode, bool compact)
+        {
+            bool showReset = !compact;
+            int columnsPerGroup = ColumnsPerGroup(mode, showReset);
+
+            double total = IconHostSizeForMode(mode, compact);
             int columnCount = 1;
             int groups = (rows.Count + MaxRowsPerGroup - 1) / MaxRowsPerGroup;
 
             for (int group = 0; group < groups; group++)
             {
-                var layout = CalculateLayoutMetrics(rows, mode, group);
-                total += layout.LabelWidth + layout.ResetWidth;
+                var layout = CalculateLayoutMetrics(rows, mode, group, compact);
+                total += layout.LabelWidth + (showReset ? layout.ResetWidth : 0);
                 total += mode switch
                 {
                     WidgetDisplayMode.PercentagesOnly => layout.ValueWidth,
@@ -1449,14 +1467,17 @@ namespace TaskbarQuota.Controls
                 columnCount += columnsPerGroup;
             }
 
-            double padding = Root.Padding.Left + Root.Padding.Right + WidthSlack;
-            return (int)Math.Ceiling(total + (Math.Max(0, columnCount - 1) * PanelColumnSpacing) + padding);
+            double columnSpacing = compact ? CompactPanelColumnSpacing : PanelColumnSpacing;
+            double horizontalPadding = compact ? CompactRootHorizontalPadding : DefaultRootHorizontalPadding;
+            double padding = horizontalPadding + WidthSlack;
+            return (int)Math.Ceiling(total + (Math.Max(0, columnCount - 1) * columnSpacing) + padding);
         }
 
         private static WidgetLayoutMetrics CalculateLayoutMetrics(
             IReadOnlyList<WidgetUsageRow> rows,
             WidgetDisplayMode mode,
-            int group)
+            int group,
+            bool compact)
         {
             int start = group * MaxRowsPerGroup;
             int count = Math.Min(MaxRowsPerGroup, rows.Count - start);
@@ -1464,14 +1485,15 @@ namespace TaskbarQuota.Controls
             // measure at that size — otherwise the label ("Credits") is sized too narrow and clips.
             bool isSingleRowGroup = rows.Count == 1 && count == 1;
             int labelFont = isSingleRowGroup ? WidgetFontSize + 1 : WidgetFontSize;
+            double glyphReserve = compact ? CompactRowLabelGlyphReserve : RowLabelGlyphReserve;
             double widestLabel = 0;
             double widestReset = 0;
             for (int i = 0; i < count; i++)
             {
                 var row = rows[start + i];
-                double iconWidth = row.GlyphData != null ? RowLabelGlyphReserve : 0;
-                widestLabel = Math.Max(widestLabel, MeasureTextWidth(BaseLabelText(row, mode), labelFont) + iconWidth);
-                if (!string.IsNullOrWhiteSpace(row.ResetDescription))
+                double iconWidth = row.GlyphData != null ? glyphReserve : 0;
+                widestLabel = Math.Max(widestLabel, MeasureTextWidth(BaseLabelText(row, mode, compact), labelFont) + iconWidth);
+                if (!compact && !string.IsNullOrWhiteSpace(row.ResetDescription))
                     widestReset = Math.Max(widestReset, MeasureTextWidth($"({CompactResetDescription(row.ResetDescription)})", labelFont));
             }
 
@@ -1480,10 +1502,10 @@ namespace TaskbarQuota.Controls
             {
                 var row = rows[start + i];
                 widestValue = Math.Max(widestValue, MeasureTextWidth(row.Value, labelFont));
-                if (row.Label == "Credits")
+                if (row.Label is "Credits" or "Cr")
                     widestValue = Math.Max(widestValue, MeasureTextWidth(CreditValueSample(row.Value), labelFont));
                 // Reserve room for a large dollar balance so amounts like "$1,000.00" aren't clipped.
-                if (row.Label == "Balance")
+                if (row.Label is "Balance" or "Bal")
                     widestValue = Math.Max(widestValue, MeasureTextWidth("$1,000.00", labelFont));
             }
 
@@ -1494,19 +1516,22 @@ namespace TaskbarQuota.Controls
             for (int i = 0; i < count; i++)
                 groupHasBar |= rows[start + i].HasBar;
 
-            double valueWidth = groupHasBar || mode == WidgetDisplayMode.PercentagesOnly
-                ? Math.Max(ValueColumnWidth, widestValue + 4)
-                : widestValue + 4;
+            double valueWidth = compact
+                ? widestValue + 2
+                : (groupHasBar || mode == WidgetDisplayMode.PercentagesOnly
+                    ? Math.Max(ValueColumnWidth, widestValue + 4)
+                    : widestValue + 4);
+            double compactBarWidth = BarWidthForMode(mode, compact);
             double barWidth = mode switch
             {
-                WidgetDisplayMode.BarsAndPercentages => groupHasBar ? BarColumnWidthBarsAndPercentages : 0,
-                WidgetDisplayMode.BarsOnly => groupHasBar ? BarColumnWidthBarsOnly : valueWidth,
+                WidgetDisplayMode.BarsAndPercentages => groupHasBar ? compactBarWidth : 0,
+                WidgetDisplayMode.BarsOnly => groupHasBar ? compactBarWidth : valueWidth,
                 _ => 0,
             };
 
             return new WidgetLayoutMetrics(
-                Math.Max(MinLabelColumnWidth, widestLabel + 3),
-                widestReset == 0 ? MinResetColumnWidth : widestReset + 2,
+                Math.Max(MinLabelColumnWidth, widestLabel + (compact ? 2 : 3)),
+                compact ? 0 : (widestReset == 0 ? MinResetColumnWidth : widestReset + 2),
                 valueWidth,
                 barWidth);
         }
@@ -1519,8 +1544,10 @@ namespace TaskbarQuota.Controls
             bool showBars,
             bool showPercentages,
             double barWidth,
-            bool isSingleRowGroup)
+            bool isSingleRowGroup,
+            bool compact)
         {
+            bool showReset = !compact;
             int rowSpan = isSingleRowGroup ? MaxRowsPerGroup : 1;
             int textSize = isSingleRowGroup ? WidgetFontSize + 1 : WidgetFontSize;
             bool compactTextOnlyValue = !usageRow.HasBar && mode != WidgetDisplayMode.PercentagesOnly;
@@ -1530,13 +1557,15 @@ namespace TaskbarQuota.Controls
                 compactTextOnlyValue ? TextAlignment.Left : TextAlignment.Center,
                 textSize);
             value.Foreground = usageRow.ForegroundBrush ?? Foreground;
-            var reset = CreateResetText(usageRow, textSize);
+            TextBlock? reset = showReset ? CreateResetText(usageRow, textSize) : null;
 
             FrameworkElement label;
             if (usageRow.GlyphData != null)
             {
-                var icon = CreateNormalizedGlyph(usageRow.GlyphData, RowLabelGlyphSize, Foreground, new Thickness(0, 0, 4, 0));
-                var labelText = CreateLabelText(usageRow, mode, textSize);
+                double glyphSize = compact ? CompactRowLabelGlyphSize : RowLabelGlyphSize;
+                double glyphRightMargin = compact ? 3 : 4;
+                var icon = CreateNormalizedGlyph(usageRow.GlyphData, glyphSize, Foreground, new Thickness(0, 0, glyphRightMargin, 0));
+                var labelText = CreateLabelText(usageRow, mode, textSize, compact);
                 var sp = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -1548,7 +1577,7 @@ namespace TaskbarQuota.Controls
             }
             else
             {
-                label = CreateLabelText(usageRow, mode, textSize);
+                label = CreateLabelText(usageRow, mode, textSize, compact);
             }
 
             var track = new Border { CornerRadius = new CornerRadius(2), Opacity = 0.28 };
@@ -1584,42 +1613,46 @@ namespace TaskbarQuota.Controls
                 });
             }
 
+            int valueOrBarColumn = firstColumn + (showReset ? 2 : 1);
             switch (mode)
             {
                 case WidgetDisplayMode.PercentagesOnly:
                     AddToPanel(label, row, firstColumn, rowSpan);
-                    AddToPanel(reset, row, firstColumn + 1, rowSpan);
-                    AddToPanel(value, row, firstColumn + 2, rowSpan);
+                    if (reset != null)
+                        AddToPanel(reset, row, firstColumn + 1, rowSpan);
+                    AddToPanel(value, row, valueOrBarColumn, rowSpan);
                     break;
 
                 case WidgetDisplayMode.BarsAndPercentages:
                     value.Visibility = showPercentages ? Visibility.Visible : Visibility.Collapsed;
                     AddToPanel(label, row, firstColumn, rowSpan);
-                    AddToPanel(reset, row, firstColumn + 1, rowSpan);
+                    if (reset != null)
+                        AddToPanel(reset, row, firstColumn + 1, rowSpan);
                     if (usageRow.HasBar)
                     {
                         barHost.Visibility = showBars ? Visibility.Visible : Visibility.Collapsed;
-                        AddToPanel(barHost, row, firstColumn + 2, rowSpan);
-                        AddToPanel(value, row, firstColumn + 3, rowSpan);
+                        AddToPanel(barHost, row, valueOrBarColumn, rowSpan);
+                        AddToPanel(value, row, valueOrBarColumn + 1, rowSpan);
                     }
                     else
                     {
                         Grid.SetColumnSpan(value, 2);
-                        AddToPanel(value, row, firstColumn + 2, rowSpan);
+                        AddToPanel(value, row, valueOrBarColumn, rowSpan);
                     }
                     break;
 
                 default:
                     AddToPanel(label, row, firstColumn, rowSpan);
-                    AddToPanel(reset, row, firstColumn + 1, rowSpan);
+                    if (reset != null)
+                        AddToPanel(reset, row, firstColumn + 1, rowSpan);
                     if (usageRow.HasBar)
                     {
                         barHost.Visibility = showBars ? Visibility.Visible : Visibility.Collapsed;
-                        AddToPanel(barHost, row, firstColumn + 2, rowSpan);
+                        AddToPanel(barHost, row, valueOrBarColumn, rowSpan);
                     }
                     else
                     {
-                        AddToPanel(value, row, firstColumn + 2, rowSpan);
+                        AddToPanel(value, row, valueOrBarColumn, rowSpan);
                     }
                     break;
             }
@@ -1698,9 +1731,9 @@ namespace TaskbarQuota.Controls
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        private FrameworkElement CreateLabelText(WidgetUsageRow row, WidgetDisplayMode mode, int fontSize = WidgetFontSize)
+        private FrameworkElement CreateLabelText(WidgetUsageRow row, WidgetDisplayMode mode, int fontSize = WidgetFontSize, bool compact = false)
         {
-            var baseLabel = CreateText(BaseLabelText(row, mode), 0.78, TextAlignment.Left, fontSize);
+            var baseLabel = CreateText(BaseLabelText(row, mode, compact), 0.78, TextAlignment.Left, fontSize);
             baseLabel.TextTrimming = TextTrimming.None;
             // Explicit brush: inheritance is unreliable once Application theme resources disagree
             // with the floating window's light/dark chrome.
@@ -1795,6 +1828,7 @@ namespace TaskbarQuota.Controls
                 result.IsStale ? "stale" : "live",
                 result.Source.Kind.ToString(),
                 result.Source.DisplayName,
+                WidgetSettingsService.CompactWidgetMode ? "compact" : "normal",
             };
 
             if (result.Fetch is not { } fetch)
@@ -1876,8 +1910,8 @@ namespace TaskbarQuota.Controls
             return $"{row.Label}: {row.Value} - {reset}";
         }
 
-        private static string BaseLabelText(WidgetUsageRow row, WidgetDisplayMode mode)
-            => mode == WidgetDisplayMode.PercentagesOnly ? row.Label + ":" : row.Label;
+        private static string BaseLabelText(WidgetUsageRow row, WidgetDisplayMode mode, bool compact)
+            => mode == WidgetDisplayMode.PercentagesOnly && !compact ? row.Label + ":" : row.Label;
 
         private static double MeasureTextWidth(string text, int fontSize = WidgetFontSize)
         {
@@ -1970,16 +2004,28 @@ namespace TaskbarQuota.Controls
         private static string CompactLabel(string label)
         {
             label = label.Trim();
+            bool compact = WidgetSettingsService.CompactWidgetMode;
             return label switch
             {
                 "Total usage" => "Total",
-                "Auto + Composer Usage" => "Auto+Composer",
+                "Auto + Composer Usage" => compact ? "Auto" : "Auto+Composer",
                 "API Usage" => "API",
-                "Session" => "Session",
-                "Spark Session" => "Spark Session",
+                "Session" => compact ? "5h" : "Session",
+                "Weekly" => compact ? "Wk" : "Weekly",
+                "Monthly" => compact ? "Mo" : "Monthly",
+                "Credits" => compact ? "Cr" : "Credits",
+                "Balance" => compact ? "Bal" : "Balance",
+                "Usage" => compact ? "Use" : "Usage",
+                "Model" => compact ? "Mod" : "Model",
+                "Spark Session" => compact ? "Spark" : "Spark Session",
+                "Argon Weekly" => compact ? "Argon" : "Argon Weekly",
+                "Argon 5h" => compact ? "Arg 5h" : "Argon 5h",
+                // Keep Fable and Resets spelled out even in compact mode.
+                "Fable" => "Fable",
+                "Resets" => "Resets",
                 _ when label.Contains("claude", StringComparison.OrdinalIgnoreCase) => "Claude",
-                _ when label.Contains("gemini", StringComparison.OrdinalIgnoreCase) && label.Contains("flash", StringComparison.OrdinalIgnoreCase) => "Gemini Flash",
-                _ when label.Contains("gemini", StringComparison.OrdinalIgnoreCase) && label.Contains("pro", StringComparison.OrdinalIgnoreCase) => "Gemini Pro",
+                _ when label.Contains("gemini", StringComparison.OrdinalIgnoreCase) && label.Contains("flash", StringComparison.OrdinalIgnoreCase) => compact ? "G Flash" : "Gemini Flash",
+                _ when label.Contains("gemini", StringComparison.OrdinalIgnoreCase) && label.Contains("pro", StringComparison.OrdinalIgnoreCase) => compact ? "G Pro" : "Gemini Pro",
                 _ when label.Contains("github copilot", StringComparison.OrdinalIgnoreCase) => "Copilot",
                 _ => label.Length > 12 ? label[..12] : label,
             };

@@ -129,4 +129,7 @@ internal static class TaskbarSpace
 
     public static bool TryGetTileWidth(Usage.ProviderId provider, out int logicalWidth)
         => Measured.TryGetValue(provider, out logicalWidth);
+
+    public static void ClearMeasuredTileWidths()
+        => Measured.Clear();
 }

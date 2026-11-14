@@ -89,6 +89,7 @@ namespace TaskbarQuota.Views
             ApplyQuotaAlertSettingsToControls();
             AutoHideUnavailableToggle.IsOn = WidgetSettingsService.AutoHideUnavailable;
             HideWhenUnfocusedToggle.IsOn = WidgetSettingsService.HideWhenProviderUnfocused;
+            CompactWidgetToggle.IsOn = WidgetSettingsService.CompactWidgetMode;
             ColoredIconsToggle.IsOn = !WidgetSettingsService.MonochromeProviderIcons;
             ViewModel.ReloadProviders();
             RebuildProviderSettings();
@@ -309,6 +310,14 @@ namespace TaskbarQuota.Views
                 return;
 
             WidgetSettingsService.ApplyHideWhenProviderUnfocused(HideWhenUnfocusedToggle.IsOn);
+        }
+
+        private void OnCompactWidgetToggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing)
+                return;
+
+            WidgetSettingsService.ApplyCompactWidgetMode(CompactWidgetToggle.IsOn);
         }
 
         private void OnColoredIconsToggled(object sender, RoutedEventArgs e)
@@ -846,6 +855,8 @@ namespace TaskbarQuota.Views
                 // ignore — no feedback loop with the slider/toggle change handlers.
                 if (FloatingClickThroughToggle.IsOn != WidgetSettingsService.FloatingClickThrough)
                     FloatingClickThroughToggle.IsOn = WidgetSettingsService.FloatingClickThrough;
+                if (CompactWidgetToggle.IsOn != WidgetSettingsService.CompactWidgetMode)
+                    CompactWidgetToggle.IsOn = WidgetSettingsService.CompactWidgetMode;
 
                 // The floating HUD's wheel gestures change these while the page may be open.
                 SyncSlider(_floatingOpacitySlider, FloatingOpacityLabel, WidgetSettingsService.FloatingOpacity);
